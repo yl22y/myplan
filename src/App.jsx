@@ -133,6 +133,93 @@ function buildDays(weekIndex) {
   });
 }
 
+// ─── Weight Chart ─────────────────────────────────────────────────────────────
+function WeightChart({ weights, startW, goalW }) {
+  const W = 340, H = 160, PL = 38, PR = 16, PT = 16, PB = 28;
+  const iW = W - PL - PR, iH = H - PT - PB;
+
+  // Build points: start at week 0 = startW, then each logged entry
+  const allPoints = [{ week: -0.5, kg: startW }, ...weights];
+  const maxWeek = Math.max(weights.length > 0 ? weights[weights.length - 1].week : 0, 3);
+  const minKg = Math.min(goalW - 0.5, ...weights.map(w => w.kg));
+  const maxKg = Math.max(startW + 0.3, ...weights.map(w => w.kg));
+  const kgRange = maxKg - minKg || 1;
+
+  const xOf = week => PL + ((week + 0.5) / (maxWeek + 0.5)) * iW;
+  const yOf = kg => PT + (1 - (kg - minKg) / kgRange) * iH;
+
+  const pts = allPoints.map(p => ({ x: xOf(p.week), y: yOf(p.kg), kg: p.kg, week: p.week }));
+  const goalY = yOf(goalW);
+
+  // Smooth polyline path
+  const linePath = pts.length > 1
+    ? pts.map((p, i) => (i === 0 ? `M${p.x},${p.y}` : `L${p.x},${p.y}`)).join(" ")
+    : null;
+
+  // Y axis labels (3 ticks)
+  const yTicks = [maxKg, (maxKg + minKg) / 2, minKg].map(kg => ({
+    kg: Math.round(kg * 10) / 10,
+    y: yOf(kg),
+  }));
+
+  return (
+    <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: "block" }}>
+      {/* Goal line */}
+      <line x1={PL} y1={goalY} x2={W - PR} y2={goalY} stroke={C.blueMid} strokeWidth="1" strokeDasharray="4 3" />
+      <text x={W - PR + 2} y={goalY + 4} fontSize="9" fill={C.blueDark} fontFamily="sans-serif">goal</text>
+
+      {/* Y axis ticks */}
+      {yTicks.map((t, i) => (
+        <g key={i}>
+          <line x1={PL - 4} y1={t.y} x2={PL} y2={t.y} stroke={C.border} strokeWidth="1" />
+          <text x={PL - 6} y={t.y + 4} fontSize="9" fill={C.textSoft} textAnchor="end" fontFamily="sans-serif">{t.kg}</text>
+        </g>
+      ))}
+
+      {/* X axis */}
+      <line x1={PL} y1={PT + iH} x2={W - PR} y2={PT + iH} stroke={C.border} strokeWidth="1" />
+
+      {/* Grid lines */}
+      {yTicks.map((t, i) => (
+        <line key={i} x1={PL} y1={t.y} x2={W - PR} y2={t.y} stroke={C.border} strokeWidth="0.5" />
+      ))}
+
+      {/* Gradient fill under line */}
+      {linePath && (
+        <>
+          <defs>
+            <linearGradient id="wfill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={C.pinkMid} stopOpacity="0.25" />
+              <stop offset="100%" stopColor={C.pinkMid} stopOpacity="0.02" />
+            </linearGradient>
+          </defs>
+          <path
+            d={`${linePath} L${pts[pts.length - 1].x},${PT + iH} L${pts[0].x},${PT + iH} Z`}
+            fill="url(#wfill)"
+          />
+          <path d={linePath} fill="none" stroke={C.pinkMid} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        </>
+      )}
+
+      {/* Dots + week labels */}
+      {pts.map((p, i) => {
+        if (p.week < 0) return null;
+        return (
+          <g key={i}>
+            <circle cx={p.x} cy={p.y} r="4" fill={C.white} stroke={C.pinkMid} strokeWidth="2" />
+            <text x={p.x} y={PT + iH + 11} fontSize="9" fill={C.textSoft} textAnchor="middle" fontFamily="sans-serif">
+              W{p.week + 1}
+            </text>
+          </g>
+        );
+      })}
+
+      {/* Start dot */}
+      <circle cx={pts[0].x} cy={pts[0].y} r="3.5" fill={C.border} stroke={C.textSoft} strokeWidth="1.5" />
+    </svg>
+  );
+}
+
 // ─── Shared style helpers ────────────────────────────────────────────────────
 const s = {
   card: { background: C.white, border: `1px solid ${C.border}`, borderRadius: 16, overflow: "hidden" },
@@ -416,6 +503,20 @@ export default function App() {
                   <div style={{ fontSize: 19, fontWeight: 600, color: x.color }}>{x.value}</div>
                 </div>
               ))}
+            </div>
+
+            {/* Weight chart */}
+            <div style={{ ...s.card, marginBottom: 12 }}>
+              <div style={{ padding: "11px 14px 4px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: C.pinkText }}>Weight over time</div>
+                <div style={{ fontSize: 11, color: C.textSoft }}>{startW}kg → {goalW}kg</div>
+              </div>
+              <div style={{ padding: "4px 8px 10px" }}>
+                {weights.length === 0
+                  ? <div style={{ textAlign: "center", padding: "28px 0", fontSize: 13, color: C.textSoft }}>Log your first weigh-in to see your chart ✨</div>
+                  : <WeightChart weights={weights} startW={startW} goalW={goalW} />
+                }
+              </div>
             </div>
 
             <div style={{ ...s.cardP, marginBottom: 12 }}>
